@@ -1,0 +1,5 @@
+out.asm
+out.o
+out
+build/
+.vscode/

@@ -12,7 +12,9 @@ enum class TokenType{
     let,
     open_paren,
     close_paren,
-    eq
+    eq,
+    plus,
+    minus
 };
 
 struct Token{
@@ -72,6 +74,16 @@ class Tokenizer{
                 else if(peek().value() == ';'){
                     consume();    
                     tokens.push_back(Token{TokenType::semi});
+                    continue;
+                }
+                else if(peek().value() == '+'){
+                    consume();    
+                    tokens.push_back(Token{TokenType::plus});
+                    continue;
+                }
+                else if(peek().value() == '-'){
+                    consume();    
+                    tokens.push_back(Token{TokenType::minus});
                     continue;
                 }
                 else if(peek().value() == '='){

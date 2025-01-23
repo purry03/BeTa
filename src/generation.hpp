@@ -28,6 +28,39 @@ class Generator{
                     offset << "QWORD [rsp + " << (gen->m_stack_size - var.stack_location - 1)*8 << "]";
                     gen->push(offset.str());
                 }
+                void operator()(const NodeExprMath& expr_math){
+                    if(expr_math.arg1.type == TokenType::ident){
+                        const auto& var = gen->m_vars.at(expr_math.arg1.value.value());
+                        std::stringstream offset;
+                        offset << "QWORD [rsp + " << (gen->m_stack_size - var.stack_location - 1)*8 << "]";
+                        gen->push(offset.str());
+                    }
+                    else{
+                        gen->m_output << "    mov rax, " << expr_math.arg1.value.value() << "\n";
+                        gen->push("rax");
+                    }
+
+                    if(expr_math.arg2.type == TokenType::ident){
+                        const auto& var = gen->m_vars.at(expr_math.arg2.value.value());
+                        std::stringstream offset;
+                        offset << "QWORD [rsp + " << (gen->m_stack_size - var.stack_location - 1)*8 << "]";
+                        gen->push(offset.str());
+                    }
+                    else{
+                        gen->m_output << "    mov rax, " << expr_math.arg2.value.value() << "\n";
+                        gen->push("rax");
+                    }
+
+                    gen->pop("rax");
+                    gen->pop("rbx");
+                    if(expr_math.op.type == TokenType::plus){
+                        gen->m_output << "    add rax, rbx\n";
+                        gen->push("rax");
+                    } else if(expr_math.op.type == TokenType::minus){
+                        gen->m_output << "    sub rbx, rax\n";
+                        gen->push("rbx");
+                    }
+                }
             };
 
             ExprVisitor visitor{.gen = this};

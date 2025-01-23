@@ -6,6 +6,7 @@
 
 #include "tokenization.hpp"
 
+
 struct NodeExprIntLit{
     Token int_lit;
 };
@@ -14,8 +15,15 @@ struct NodeExprIdent {
     Token ident;
 };
 
+struct NodeExprMath{
+    Token arg1;
+    Token op;
+    Token arg2;
+};
+
+
 struct NodeExpr {
-    std::variant<NodeExprIntLit, NodeExprIdent> var;
+    std::variant<NodeExprIntLit, NodeExprIdent, NodeExprMath> var;
 };
 
 struct NodeStmtExit {
@@ -43,6 +51,11 @@ class Parser{
         }
 
         std::optional<NodeExpr> parse_expr(){
+
+            if(peek(1).has_value() && (peek(1).value().type == TokenType::plus || peek(1).value().type == TokenType::minus)){
+                return NodeExpr{.var = NodeExprMath{.arg1 = consume() , .op = consume() , .arg2 = consume()}};
+            }
+
             if(peek().has_value() && peek().value().type == TokenType::int_lit){
                 return NodeExpr{.var= NodeExprIntLit{.int_lit = consume()}};
             }

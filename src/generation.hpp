@@ -3,6 +3,7 @@
 #include "parser.hpp"
 #include <sstream>
 #include <unordered_map>
+#include <cassert>
 
 class Generator{
     public:
@@ -10,90 +11,78 @@ class Generator{
         {
         }
 
-        void gen_expr(const NodeExpr& expr){
-            struct ExprVisitor {
+        void gen_term(const NodeTerm* term){
+            struct TermVisitor {
                 Generator* gen;
-
-                void operator()(const NodeExprIntLit& expr_int_lit) const {
-                    gen->m_output << "    mov rax, " << expr_int_lit.int_lit.value.value() << "\n";
+                void operator()(const NodeTermIntLit* term_int_lit) const{
+                    gen->m_output << "    mov rax, " << term_int_lit->int_lit.value.value() << "\n";
                     gen->push("rax");
+
                 }
-                void operator()(const NodeExprIdent& expr_ident){
-                    if(!gen->m_vars.contains(expr_ident.ident.value.value())){
-                         std::cerr << "Undeclared identifier: " << expr_ident.ident.value.value() << std::endl;
+                void operator()(const NodeTermIdent* term_ident) const{
+                    if(!gen->m_vars.contains(term_ident->ident.value.value())){
+                         std::cerr << "Undeclared identifier: " << term_ident->ident.value.value() << std::endl;
                         exit(EXIT_FAILURE);
                     }
-                    const auto& var = gen->m_vars.at(expr_ident.ident.value.value());
+                    const auto& var = gen->m_vars.at(term_ident->ident.value.value());
                     std::stringstream offset;
                     offset << "QWORD [rsp + " << (gen->m_stack_size - var.stack_location - 1)*8 << "]";
                     gen->push(offset.str());
                 }
-                void operator()(const NodeExprMath& expr_math){
-                    if(expr_math.arg1.type == TokenType::ident){
-                        const auto& var = gen->m_vars.at(expr_math.arg1.value.value());
-                        std::stringstream offset;
-                        offset << "QWORD [rsp + " << (gen->m_stack_size - var.stack_location - 1)*8 << "]";
-                        gen->push(offset.str());
-                    }
-                    else{
-                        gen->m_output << "    mov rax, " << expr_math.arg1.value.value() << "\n";
-                        gen->push("rax");
-                    }
+            };
 
-                    if(expr_math.arg2.type == TokenType::ident){
-                        const auto& var = gen->m_vars.at(expr_math.arg2.value.value());
-                        std::stringstream offset;
-                        offset << "QWORD [rsp + " << (gen->m_stack_size - var.stack_location - 1)*8 << "]";
-                        gen->push(offset.str());
-                    }
-                    else{
-                        gen->m_output << "    mov rax, " << expr_math.arg2.value.value() << "\n";
-                        gen->push("rax");
-                    }
+            TermVisitor visitor({.gen = this});
+            std::visit(visitor, term->var);
+        }
 
+        void gen_expr(const NodeExpr* expr){
+            struct ExprVisitor {
+                Generator* gen;
+
+                void operator()(const NodeTerm* term) const {
+                    gen->gen_term(term);
+                }
+                void operator()(const NodeBinExpr* bin_expr){
+                    gen->gen_expr(bin_expr->add->lhs);
+                    gen->gen_expr(bin_expr->add->rhs);
                     gen->pop("rax");
                     gen->pop("rbx");
-                    if(expr_math.op.type == TokenType::plus){
-                        gen->m_output << "    add rax, rbx\n";
-                        gen->push("rax");
-                    } else if(expr_math.op.type == TokenType::minus){
-                        gen->m_output << "    sub rbx, rax\n";
-                        gen->push("rbx");
-                    }
+                    gen->m_output << "    add rax, rbx\n";
+                    gen->push("rax");
                 }
             };
 
             ExprVisitor visitor{.gen = this};
-            std::visit(visitor, expr.var);
+            std::visit(visitor, expr->var);
         }
 
-        void gen_stmt(const NodeStmt& stml) {
+        void gen_stmt(const NodeStmt* stml) {
             struct StmtVistor {
                 Generator* gen;
-                void operator()(const NodeStmtExit& stmt_exit) const {
-                    gen->gen_expr(stmt_exit.expr);
+                void operator()(const NodeStmtExit* stmt_exit) const {
+                    gen->gen_expr(stmt_exit->expr);
                     gen->m_output << "    mov rax, 60\n";
                     gen->pop("rdi");
                     gen->m_output << "    syscall \n";
                 }
-                void operator()(const NodeStmtLet& stmt_let){
-                    if(gen->m_vars.contains(stmt_let.ident.value.value())){
-                        std::cerr << "Identifier already used: " << stmt_let.ident.value.value() << std::endl;
+                void operator()(const NodeStmtLet* stmt_let){
+                    if(gen->m_vars.contains(stmt_let->ident.value.value())){
+                        std::cerr << "Identifier already used: " << stmt_let->ident.value.value() << std::endl;
                         exit(EXIT_FAILURE);
                     }
-                    gen->m_vars.insert({stmt_let.ident.value.value(), Var {.stack_location = gen->m_stack_size}});
-                    gen->gen_expr(stmt_let.expr);                    
+                    gen->m_vars.insert({stmt_let->ident.value.value(), Var {.stack_location = gen->m_stack_size}});
+                    gen->gen_expr(stmt_let->expr);                    
                 }
             };
 
             StmtVistor visitor{.gen = this};
-            std::visit(visitor, stml.var);
+            std::visit(visitor, stml->var);
         }
 
         [[nodiscard]] std::string gen_prog() {
             m_output << "global _start\n_start:\n";
 
-            for(const NodeStmt& stmt : m_prog.stmts){
+            for(const NodeStmt* stmt : m_prog.stmts){
                 gen_stmt(stmt);
             }
 
